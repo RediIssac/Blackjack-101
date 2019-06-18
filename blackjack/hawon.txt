@@ -1,0 +1,9 @@
+		TRAIN FROM SCRATCH, DONT RUN THIS COMMAND
+./darknet detector train /home/leadlab/darknet2/darknet/build/darknet/x64/data/obj.data /home/leadlab/darknet2/darknet/build/darknet/x64/yolov3-tiny-card.cfg yolov3-tiny-card.weights -map
+
+
+		DEMO WEBCAM
+./darknet detector demo /home/leadlab/darknet2/darknet/build/darknet/x64/data/obj.data /home/leadlab/darknet2/darknet/build/darknet/x64/yolov3-tiny-card.cfg yolov3-tiny-card_best.weights -c 1
+
+		VIDEO STREAM
+./darknet detector demo /home/leadlab/darknet2/darknet/build/darknet/x64/data/obj.data /home/leadlab/darknet2/darknet/build/darknet/x64/yolov3-tiny-card.cfg yolov3-tiny-card_best.weights http://172.16.16.124:8080/video?dummy=param.mjpg -i 0
