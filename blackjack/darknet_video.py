@@ -1,3 +1,5 @@
+# Modified code from AlexeyBY's Darknet
+
 from ctypes import *
 import math
 import random
@@ -7,6 +9,36 @@ import numpy as np
 import time
 import darknet
 
+# ------------------------------ BLACKJACK VARIABLES ------------------------------ #
+p1 = []
+p2 = []
+p3 = []
+p4 = []
+stack = []
+acc_thresh = 80.0
+
+# ------------------------------ BLACKJACK FUNCTIONS ------------------------------ #
+def computeHand(arr):
+    val = 0
+    ace = 0
+
+    for card in arr:
+
+        # strip the suit
+        temp = card[:-1]
+
+        # compute value for face cards
+        if temp == 'J' or temp == 'K' or temp == 'Q':
+            val = val + 10
+        # compute value for face card: A
+        elif temp == 'A':
+            ace = ace + 1
+        # get numeric value
+        else:
+            val = val + int(temp)
+    return val, ace
+
+# ------------------------------ YoloV3 Functions / Instance Variables ------------------------------ #
 def convertBack(x, y, w, h):
     xmin = int(round(x - (w / 2)))
     xmax = int(round(x + (w / 2)))
@@ -33,12 +65,11 @@ def cvDrawBoxes(detections, img):
                     [0, 255, 0], 2)
     return img
 
-
 netMain = None
 metaMain = None
 altNames = None
 
-
+# ------------------------------ YoloV3 Main Function ------------------------------ #
 def YOLO():
 
     global metaMain, netMain, altNames
@@ -79,17 +110,17 @@ def YOLO():
                     pass
         except Exception:
             pass
+
     cap = cv2.VideoCapture(1)
     # cap = cv2.VideoCapture("test.mp4")
     # cap = cv2.VideoCapture()
     # cap.open("http://172.16.16.124:8080/video?dummy=param.mjpg")
 
-
     cap.set(3, 1280)
     cap.set(4, 720)
-    out = cv2.VideoWriter(
-        "output.avi", cv2.VideoWriter_fourcc(*"MJPG"), 10.0,
-        (darknet.network_width(netMain), darknet.network_height(netMain)))
+    # out = cv2.VideoWriter(
+    #     "output.avi", cv2.VideoWriter_fourcc(*"MJPG"), 10.0,
+    #     (darknet.network_width(netMain), darknet.network_height(netMain)))
     print("Starting the YOLO loop...")
 
     # Create an image we reuse for each detect
@@ -107,14 +138,38 @@ def YOLO():
         darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
 
         detections = darknet.detect_image(netMain, metaMain, darknet_image, thresh=0.25)
+
+        # print(detections)
         image = cvDrawBoxes(detections, frame_resized)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        print(1/(time.time()-prev_time))
+        # print(1/(time.time()-prev_time))
+
         cv2.imshow('Demo', image)
-        cv2.waitKey(3)
+        # cv2.waitKey(3)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            print(key)
+            break
+
+        elif key == ord("f"):
+            for cards in detections:
+                # print(cards)
+                # Get the class of the detection
+                temp = cards[0]
+                accuracy = cards[1] * 100
+                suit_num = temp.decode("utf-8")
+
+                if accuracy >= acc_thresh and suit_num not in stack:
+                    stack.append(suit_num)
+
+                # print(suit_num, accuracy)
+            print(stack, computeHand(stack))
 
     cap.release()
-    out.release()
+    # out.release()
+    cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     YOLO()
