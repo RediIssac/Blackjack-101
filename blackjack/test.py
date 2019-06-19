@@ -13,7 +13,7 @@ import numpy as np
 
 card_weight = "model/yolov3-card.weights"
 card_cfg = "model/yolov3-tiny-card.cfg"
-card_classes = "model/card.names"
+card_classes = "model/obj.names"
 
 # Get names of output layers, output for YOLOv3 is ['yolo_16', 'yolo_23']
 def getOutputsNames(net):
@@ -57,9 +57,9 @@ net = cv2.dnn.readNet(card_weight,card_cfg)
 
 
 # Define video capture for default cam
-# cap = cv2.VideoCapture(1)
-cap = cv2.VideoCapture()
-cap.open("http://172.16.16.124:8080/video?dummy=param.mjpg")
+cap = cv2.VideoCapture(0)
+# cap = cv2.VideoCapture()
+# cap.open("http://172.16.16.124:8080/video?dummy=param.mjpg")
 
 while cv2.waitKey(1) < 0 or False:
 

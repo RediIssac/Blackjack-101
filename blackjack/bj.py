@@ -17,13 +17,23 @@ p1 = []
 p2 = []
 p3 = []
 p4 = []
-stack = {}
+stack = []
 players = {}
 suggestions = []
 allocated = []
 clusters = []
 acc_thresh = 75.0
 num_players = 0
+
+px1 = 0
+px2 = 0
+px3 = 0
+px4 = 0
+
+py1 = 0
+py2 = 0
+py3 = 0
+py4 = 0
 
 # ------------------------------ BLACKJACK FUNCTIONS ------------------------------ #
 def computeHand(arr):
@@ -169,11 +179,6 @@ def cvDrawBoxes(detections, img):
                     [0, 255, 0], 2)
     return img
 
-# among multiple detections, choose one most frequent ones
-def choose_winner(detections):
-    # dictionary for frequency
-    size = len(detections[-1])
-
 netMain = None
 metaMain = None
 altNames = None
@@ -223,7 +228,6 @@ def YOLO():
 
     num_players = setup()
     clusters = []
-    start = True
     cap = cv2.VideoCapture(1)
 
     cap.set(3, 1280)
@@ -234,10 +238,6 @@ def YOLO():
     # Create an image we reuse for each detect
     darknet_image = darknet.make_image(darknet.network_width(netMain),
                                     darknet.network_height(netMain),3)
-
-    # count the occurance of the cards
-    cards_count = {}
-    frame_count = 0
     while True:
         prev_time = time.time()
         ret, frame_read = cap.read()
@@ -247,67 +247,108 @@ def YOLO():
                                     darknet.network_height(netMain)),
                                    interpolation=cv2.INTER_LINEAR)
 
-        if frame_count % 5 == 0:
-            frame_count = 1
-            # detect cards
-            darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
-            detections = darknet.detect_image(netMain, metaMain, darknet_image, thresh=0.25)
+        # detect cards
+        darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
+        detections = darknet.detect_image(netMain, metaMain, darknet_image, thresh=0.25)
 
-            # track motion of hand
-            frame_motion = process_frame(frame_read)
-            motion_quadrant = track_frame(frame_motion, 100)
+        # draw bounding boxes
+        image = cvDrawBoxes(detections, frame_resized)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # print(1/(time.time()-prev_time))
 
-            # draw bounding boxes
-            image = cvDrawBoxes(detections, frame_resized)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            # print(1/(time.time()-prev_time))
+        # draw boundaries for each player
+        frame_height = frame_resized.shape[0]
+        frame_width = frame_resized.shape[1]
 
-            # compute clusters
-            # 0 label, 1 accuracy, 2:0 x-coord, 2:1 y-coord, 2:2 frame width, 2:3 frame height
-            for cards in detections:
-                # Get the class of the detection
-                temp = cards[0]
-                accuracy = cards[1] * 100
-                suit_num = temp.decode("utf-8")
+        offset = 100
+        if num_players == 1:
+            py1 = int(100)
+            px1 = int(frame_width /2) - offset
+            cv2.putText(image, "Player 1",(px1, py1), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
 
-                # if a new card is found
-                if accuracy >= acc_thresh:
-                    if suit_num not in stack:
-                        stack[suit_num] = [cards[2][0], cards[2][1]]
-                        cards_count[suit_num] = 1
-                    else:
-                        cards_count[suit_num] += 1
+        elif num_players == 2:
+            x = int(frame_width /2)
+            y1 = 0
+            y2 = frame_height
+            cv2.line(image, (x,y1), (x, y2), (0,0,0), 2)
 
-                    if len(clusters) != 0 and suit_num not in allocated and cards_count[suit_num] > 5:
-                        idx = get_closest_centroid([cards[2][0],cards[2][1]], clusters)
-                        print(idx)
-                        players[idx].append(suit_num)
-                        allocated.append(suit_num)
-                        suggestions[idx] = suggestMove(players[idx],len(allocated))
-                        new_clusters = getClusters(list(stack.values()), num_players)
-                        for new_cluster in new_clusters:
-                            clusters[get_closest_centroid(new_cluster, clusters)] = new_cluster
+            py1 = py2 = 100
+            px1 = int(frame_width / 4) - offset
+            px2 = int(frame_width / 4) * 3 - offset
+            cv2.putText(image, "Player 1",(px1, py1), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+            cv2.putText(image, "Player 2",(px2, py2), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
 
-            # each player has to have at least two cards
-            if (start and len(stack) >= num_players*2):
-                start = False
-                clusters = getClusters(list(stack.values()), num_players)
-        else:
-            frame_count += 1
+        elif num_players == 3:
+            y1 = 0
+            y2 = frame_height
+            x1 = int(frame_width / 3)
+            x2 = int(frame_width / 3) * 2
+            cv2.line(image, (x1,y1), (x1, y2), (0,0,0), 2)
+            cv2.line(image, (x2,y1), (x2, y2), (0,0,0), 2)
 
-        # suggestion displaying
-        for i in range(len(players)):
-            # print(get_closest_centroid(players[i], clusters))
-            if len(clusters) > 0:
+            py1 = py2 = py3 = 100
+            px1 = int(frame_width / 6) - offset
+            px2 = int(frame_width / 6) * 3 - offset
+            px3 = int(frame_width / 6) * 5 - offset
+            cv2.putText(image, "Player 1",(px1, py1), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+            cv2.putText(image, "Player 2",(px2, py2), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+            cv2.putText(image, "Player 3",(px3, py3), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
 
-                print(i, players[i], suggestions[i], clusters[i])
-                temp = clusters[i]
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                cord_x = int(temp[0])
-                cord_y = int(temp[1])
-                # cv2.putText(image, suggestions[i], (x), font, 10, (255,255,255), 2, cv2.LINE_AA)
-                cv2.putText(image, suggestions[i] ,(int(clusters[i][0]), int(clusters[i][1])), font, 4,(255,255,255),2,cv2.LINE_AA)
-                cv2.putText(image, 'Score: '+str(getScore(players[i])) ,(int(clusters[i][0])-100, int(clusters[i][1])+100), font, 4,(255,255,255),2,cv2.LINE_AA)
+        elif num_players == 4:
+            cx = int(frame_width/2)
+            cy = int(frame_height/2)
+            cv2.line(image, (cx,0), (cx, frame_height), (0,0,0), 2)
+            cv2.line(image, (0,cy), (frame_width, cy), (0,0,0), 2)
+
+            py1 = py2 = 100
+            py3 = py4 = int(frame_height / 2) + offset
+            px1 = px3 = int(frame_width / 4) - offset
+            px2 = px4 = int(frame_width / 4) * 3 - offset
+            cv2.putText(image, "Player 1",(px1, py1), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+            cv2.putText(image, "Player 2",(px2, py2), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+            cv2.putText(image, "Player 3",(px3, py3), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+            cv2.putText(image, "Player 4",(px4, py4), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+
+        # compute clusters for each player
+        # 0 label, 1 accuracy, 2:0 x-coord, 2:1 y-coord, 2:2 frame width, 2:3 frame height
+        for cards in detections:
+            # Get the class of the detection
+            temp = cards[0]
+            accuracy = cards[1] * 100
+            suit_num = temp.decode("utf-8")
+            c_x = cards[2][0]
+            c_y = cards[2][1]
+
+            print(cards)
+
+            # if a new card is found
+            if accuracy >= acc_thresh and suit_num not in stack:
+                if num_players == 1:
+                    p1.append(suit_num)
+                    stack.append(suit_num)
+                # elif num_players == 2:
+
+
+        if num_players == 1:
+            cards_dealt = len(p2) + len(p3) + len(p4)
+            move = suggestMove(p1, cards_dealt)
+            print(move)
+            cv2.putText(image, move,(px1, py1+100), cv2.FONT_HERSHEY_SIMPLEX, 2,(255,255,255),2,cv2.LINE_AA)
+
+
+
+
+        # # suggestion displaying
+        # for i in range(len(players)):
+        #     print(i, players[i], suggestions[i])
+        #     # print(get_closest_centroid(players[i], clusters))
+        #     if len(clusters) > 0:
+        #         temp = clusters[i]
+        #         font = cv2.FONT_HERSHEY_SIMPLEX
+        #         cord_x = int(temp[0])
+        #         cord_y = int(temp[1])
+        #         # cv2.putText(image, suggestions[i], (x), font, 10, (255,255,255), 2, cv2.LINE_AA)
+        #         cv2.putText(image, suggestions[i],(cord_x, cord_y), font, 4,(255,255,255),2,cv2.LINE_AA)
 
         cv2.imshow('Demo', image)
         # cv2.waitKey(3)
