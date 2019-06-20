@@ -1,5 +1,4 @@
-classes= 50
+classes= 52
 train  = ./model/train.txt
 valid  = ./model/test.txt
 names =  ./model/obj.names
-valid= train.txt
