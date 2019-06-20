@@ -1,4 +1,6 @@
-# Modified code from AlexeyBY's Darknet
+# Modified code from AlexeyBY's darknet_video.py
+
+# Authors: Hawon Park, Jeong Ho Shin, Hanbin Baik, Redi Negash
 
 from ctypes import *
 import math
@@ -8,15 +10,10 @@ import cv2
 import numpy as np
 import time
 import darknet
-# from suggestion_test import *
 from suggestion import *
 from sklearn.cluster import MiniBatchKMeans
 
 # ------------------------------ BLACKJACK VARIABLES ------------------------------ #
-p1 = []
-p2 = []
-p3 = []
-p4 = []
 stack = {}
 players = {}
 suggestions = []
@@ -26,95 +23,6 @@ acc_thresh = 75.0
 num_players = 0
 
 # ------------------------------ BLACKJACK FUNCTIONS ------------------------------ #
-def computeHand(arr):
-    val = 0
-    ace = 0
-
-    for card in arr:
-
-        # strip the suit
-        temp = card[:-1]
-
-        # compute value for face cards
-        if temp == 'J' or temp == 'K' or temp == 'Q':
-            val = val + 10
-        # compute value for face card: A
-        elif temp == 'A':
-            ace = ace + 1
-        # get numeric value
-        else:
-            val = val + int(temp)
-    return val, ace
-
-# initalizing an array for saving centroids
-centroids = []
-
-# returns the motion movement direction in quadrant numbers
-def track_frame(frame, size_back):
-
-    #dist = sqrt(pow((x2-x1),2) + pow((y2-y1),2))
-
-    if len(centroids) < size_back:
-        return
-    # print(len(centroids)-size_back)
-
-    # we need to iterate starting from the last frame back till the size given
-    back = len(centroids)-size_back
-    #for i in range(back, len(centroids)):
-
-    for c in centroids[:size_back]:
-         # put text and highlight the center
-
-        cv2.circle(frame, (c[0], c[1]), 5, (255, 255, 255), -1)
-
-        cv2.putText(frame, "c", (c[0] - 25, c[1] - 25),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-
-    # I was trying to calculate the slope here
-    x2 = centroids[len(centroids)-1][0]
-    y2 = centroids[len(centroids)-1][1]
-    x1 = centroids[back][0]
-    y1 = centroids[back][1]
-
-
-    c_y = y2-y1
-    c_x = x2-x1
-
-    # slope = (y2-y1)/(x2-x1)
-    # base on the sign of the slope predicte where the direction would
-    if (c_y == 0 and c_x == 0):
-        return 0
-    elif(c_y >=0 & c_x >=0):
-        return 1
-    elif(c_y <0 & c_x <0):
-            return 3
-    elif(c_y >=0 & c_x <= 0):
-        return 2
-    else:
-        return 4
-
-def process_frame(frame):
-    # step 1 RGB to gray
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    frame = gray
-    # step 2: filter video
-    blur = cv2.GaussianBlur(frame, (15,15), 0)
-    # find delta
-    image_diff = frame - blur
-    # find binary frames by thresholding
-    retval, thresh = cv2.threshold(image_diff, 10, 255, cv2.THRESH_BINARY)
-    frame = thresh
-
-     # calculate moments of binary image
-    M = cv2.moments(thresh)
-
-    # calculate x,y coordinate of center
-    cX = int(M["m10"] / M["m00"])
-    cY = int(M["m01"] / M["m00"])
-    centroid = [cX, cY]
-    centroids.append(centroid)
-
-
-    return frame
 
 # returns the centroids of each clusters
 def getClusters(coords, num_players):
@@ -183,9 +91,10 @@ def YOLO():
 
     global metaMain, netMain, altNames
     # weightPath = "./model/50_1024_best.weights"
-    weightPath = "./model/yolov3-card.weights"
+    weightPath = "./model/yolov3-tiny-card_best.weights"
     configPath = "./model/yolov3-tiny-card.cfg"
     metaPath = "./model/obj.data"
+
     if not os.path.exists(configPath):
         raise ValueError("Invalid config path `" +
                          os.path.abspath(configPath)+"`")
@@ -221,13 +130,22 @@ def YOLO():
         except Exception:
             pass
 
+    #initialization
     num_players = setup()
     clusters = []
     start = True
-    cap = cv2.VideoCapture(1)
 
+    # initialize webcam input (if there is an error, switch to VideoCapture(1))
+    cap = cv2.VideoCapture(0)
     cap.set(3, 1280)
     cap.set(4, 720)
+
+    # init for video input
+    # cap = cv2.VideoCapture("./test/1player.mp4")
+    # cap = cv2.VideoCapture("./test/2player.mp4")
+    # cap.set(3, 1280)
+    # cap.set(4, 720)
+    # out = cv2.VideoWriter('2player_res.avi',cv2.VideoWriter_fourcc('M','J','P','G'), 10.0, (darknet.network_width(netMain), darknet.network_height(netMain)))
 
     print("Starting the YOLO loop...")
 
@@ -237,6 +155,8 @@ def YOLO():
 
     # count the occurance of the cards
     cards_count = {}
+    allocated = []
+    stack = {}
     frame_count = 0
     while True:
         prev_time = time.time()
@@ -253,16 +173,21 @@ def YOLO():
             darknet.copy_image_from_bytes(darknet_image,frame_resized.tobytes())
             detections = darknet.detect_image(netMain, metaMain, darknet_image, thresh=0.25)
 
-            # track motion of hand
-            frame_motion = process_frame(frame_read)
-            motion_quadrant = track_frame(frame_motion, 100)
-
             # draw bounding boxes
             image = cvDrawBoxes(detections, frame_resized)
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             # print(1/(time.time()-prev_time))
 
             # compute clusters
+            if(len(detections)) == 0:
+                # reset()
+                allocated = []
+                stack = {}
+                # clusters = []
+                cards_count = {}
+                for i in range(len(players)):
+                    players[i] = []
+
             # 0 label, 1 accuracy, 2:0 x-coord, 2:1 y-coord, 2:2 frame width, 2:3 frame height
             for cards in detections:
                 # Get the class of the detection
@@ -279,6 +204,7 @@ def YOLO():
                         cards_count[suit_num] += 1
 
                     if len(clusters) != 0 and suit_num not in allocated and cards_count[suit_num] > 5:
+                        # print("heyyyyy")
                         idx = get_closest_centroid([cards[2][0],cards[2][1]], clusters)
                         print(idx)
                         players[idx].append(suit_num)
@@ -292,12 +218,12 @@ def YOLO():
             if (start and len(stack) >= num_players*2):
                 start = False
                 clusters = getClusters(list(stack.values()), num_players)
+
         else:
             frame_count += 1
 
         # suggestion displaying
         for i in range(len(players)):
-            # print(get_closest_centroid(players[i], clusters))
             if len(clusters) > 0:
 
                 print(i, players[i], suggestions[i], clusters[i])
@@ -305,12 +231,14 @@ def YOLO():
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 cord_x = int(temp[0])
                 cord_y = int(temp[1])
-                # cv2.putText(image, suggestions[i], (x), font, 10, (255,255,255), 2, cv2.LINE_AA)
-                cv2.putText(image, suggestions[i] ,(int(clusters[i][0]), int(clusters[i][1])), font, 4,(255,255,255),2,cv2.LINE_AA)
-                cv2.putText(image, 'Score: '+str(getScore(players[i])) ,(int(clusters[i][0])-100, int(clusters[i][1])+100), font, 4,(255,255,255),2,cv2.LINE_AA)
+
+                score = getScore(players[i])
+                if score > 0:
+                    cv2.putText(image, suggestions[i] ,(int(clusters[i][0]), int(clusters[i][1])), font, 2,(0,0,255),2,cv2.LINE_AA)
+                    cv2.putText(image, 'Score: '+str(score) ,(int(clusters[i][0])-100, int(clusters[i][1])+100), font, 2,(0,0,255),2,cv2.LINE_AA)
 
         cv2.imshow('Demo', image)
-        # cv2.waitKey(3)
+        # out.write(image)
 
         # key command (q) for quit
         key = cv2.waitKey(1) & 0xFF
@@ -318,31 +246,9 @@ def YOLO():
             print(key)
             break
 
-        # elif key == ord("f") or True:
-        #     # 0 label, 1 accuracy, 2:0 x-coord, 2:1 y-coord, 2:2 frame width, 2:3 frame height
-        #     for cards in detections:
-        #         # Get the class of the detection
-        #         temp = cards[0]
-        #         accuracy = cards[1] * 100
-        #         suit_num = temp.decode("utf-8")
-        #
-        #         # if a new card is found
-        #         if accuracy >= acc_thresh:
-        #             if suit_num not in stack:
-        #                 stack[suit_num] = [cards[2][0], cards[2][1]]
-        #
-        #             if len(clusters) != 0 and suit_num not in allocated:
-        #                 idx = get_closest_centroid([cards[2][0],cards[2][1]], clusters)
-        #
-        #                 players[idx].append(suit_num)
-        #                 allocated.append(suit_num)
-        #                 suggestions[idx] = suggestMove(players[idx],len(allocated))
-        #
-        #     if (len(stack) >= num_players*2):
-        #         clusters = getClusters(list(stack.values()), num_players)
-
     # release video capture and close window
     cap.release()
+    # out.release()
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
