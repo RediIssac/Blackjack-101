@@ -14,5 +14,12 @@ https://github.com/AlexeyAB/darknet
 
 navigate to blackjack directory and run darknet_video.py
 
+# Weights
+yolov3-tiny-card_best.weights:
+https://drive.google.com/file/d/1ciOmLwwHDqDu3xYRYKWDIvaJlW852yrW/view?usp=sharing
+
+yolov3-card.weights:
+https://drive.google.com/file/d/1Ok4sIYQ7QZqkt2zDu0_KhVqZGWko_TmA/view?usp=sharing
+
 # Credits to
 AlexeyAB, Geaxgx, YoloV3
